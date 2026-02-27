@@ -1094,4 +1094,459 @@
                     { name: 'right', minAngle: -22.5, maxAngle: 22.5 },
                     { name: 'up-right', minAngle: 22.5, maxAngle: 67.5 },
                     { name: 'up', minAngle: 67.5, maxAngle: 112.5 },
-                    { name: 'up-left', minAngle: 112.5, maxAngle:
+                    { name: 'up-left', minAngle: 112.5, maxAngle: 157.5 },
+                    { name: 'left', minAngle: 157.5, maxAngle: 202.5 },
+                    { name: 'down-left', minAngle: 202.5, maxAngle: 247.5 },
+                    { name: 'down', minAngle: 247.5, maxAngle: 292.5 },
+                    { name: 'down-right', minAngle: 292.5, maxAngle: 337.5 }
+                ];
+                
+                // 初始化事件监听
+                this.initEvents();
+            }
+            
+            // 初始化事件监听
+            initEvents() {
+                this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
+                this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
+                this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
+                this.canvas.addEventListener('touchcancel', this.handleTouchEnd.bind(this));
+                
+                // 鼠标事件（用于桌面测试）
+                this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+                document.addEventListener('mousemove', this.handleMouseMove.bind(this));
+                document.addEventListener('mouseup', this.handleMouseUp.bind(this));
+            }
+            
+            // 设置摇杆位置
+            setPosition(x, y) {
+                this.centerX = x;
+                this.centerY = y;
+                this.stickX = x;
+                this.stickY = y;
+                this.draw();
+            }
+            
+            // 绘制摇杆
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // 绘制底座
+                this.ctx.globalAlpha = this.opacity;
+                this.ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+                this.ctx.beginPath();
+                this.ctx.arc(this.centerX, this.centerY, this.baseRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // 绘制摇杆
+                this.ctx.fillStyle = 'rgba(78, 204, 163, 0.8)';
+                this.ctx.beginPath();
+                this.ctx.arc(this.stickX, this.stickY, this.stickRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                this.ctx.globalAlpha = 1.0;
+            }
+            
+            // 处理触摸开始
+            handleTouchStart(event) {
+                event.preventDefault();
+                if (this.isActive) return;
+                
+                const touch = event.touches[0];
+                const rect = this.canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                // 检查是否在摇杆范围内
+                const distance = Math.sqrt(Math.pow(x - this.centerX, 2) + Math.pow(y - this.centerY, 2));
+                if (distance <= this.baseRadius * 1.5) {
+                    this.isActive = true;
+                    this.touchId = touch.identifier;
+                    this.updateStickPosition(x, y);
+                }
+            }
+            
+            // 处理触摸移动
+            handleTouchMove(event) {
+                if (!this.isActive) return;
+                
+                event.preventDefault();
+                const touch = Array.from(event.touches).find(t => t.identifier === this.touchId);
+                if (!touch) return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                this.updateStickPosition(x, y);
+            }
+            
+            // 处理触摸结束
+            handleTouchEnd(event) {
+                if (!this.isActive) return;
+                
+                event.preventDefault();
+                this.isActive = false;
+                this.touchId = null;
+                this.stickX = this.centerX;
+                this.stickY = this.centerY;
+                this.currentDirection = null;
+                
+                if (this.onDirectionEnd) {
+                    this.onDirectionEnd();
+                }
+                
+                this.draw();
+            }
+            
+            // 处理鼠标按下
+            handleMouseDown(event) {
+                event.preventDefault();
+                if (this.isActive) return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                const distance = Math.sqrt(Math.pow(x - this.centerX, 2) + Math.pow(y - this.centerY, 2));
+                if (distance <= this.baseRadius * 1.5) {
+                    this.isActive = true;
+                    this.updateStickPosition(x, y);
+                }
+            }
+            
+            // 处理鼠标移动
+            handleMouseMove(event) {
+                if (!this.isActive) return;
+                
+                event.preventDefault();
+                const rect = this.canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                this.updateStickPosition(x, y);
+            }
+            
+            // 处理鼠标释放
+            handleMouseUp(event) {
+                if (!this.isActive) return;
+                
+                event.preventDefault();
+                this.isActive = false;
+                this.stickX = this.centerX;
+                this.stickY = this.centerY;
+                this.currentDirection = null;
+                
+                if (this.onDirectionEnd) {
+                    this.onDirectionEnd();
+                }
+                
+                this.draw();
+            }
+            
+            // 更新摇杆位置并计算方向
+            updateStickPosition(x, y) {
+                const dx = x - this.centerX;
+                const dy = y - this.centerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxDistance = this.baseRadius - this.stickRadius;
+                
+                // 限制摇杆移动范围
+                let limitedDistance = Math.min(distance, maxDistance);
+                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                
+                // 标准化角度到0-360度
+                if (angle < 0) angle += 360;
+                
+                // 应用死区
+                if (limitedDistance < maxDistance * this.deadZone) {
+                    this.stickX = this.centerX;
+                    this.stickY = this.centerY;
+                    this.currentDirection = null;
+                } else {
+                    const ratio = limitedDistance / distance;
+                    this.stickX = this.centerX + dx * ratio;
+                    this.stickY = this.centerY + dy * ratio;
+                    
+                    // 根据角度确定方向
+                    this.currentDirection = this.getDirectionFromAngle(angle);
+                }
+                
+                // 绘制更新
+                this.draw();
+                
+                // 触发方向变化回调
+                if (this.currentDirection !== this.lastDirection) {
+                    if (this.onDirectionChange && this.currentDirection) {
+                        this.onDirectionChange(this.currentDirection);
+                    }
+                    this.lastDirection = this.currentDirection;
+                }
+            }
+            
+            // 根据角度获取方向名称
+            getDirectionFromAngle(angle) {
+                for (const dir of this.directions) {
+                    if (angle >= dir.minAngle && angle < dir.maxAngle) {
+                        return dir.name;
+                    }
+                }
+                return 'right'; // 默认方向
+            }
+            
+            // 获取简化方向（上、下、左、右）
+            getSimpleDirection() {
+                if (!this.currentDirection) return null;
+                
+                const dir = this.currentDirection;
+                if (dir.includes('up') && !dir.includes('down')) return 'up';
+                if (dir.includes('down') && !dir.includes('up')) return 'down';
+                if (dir.includes('left') && !dir.includes('right')) return 'left';
+                if (dir.includes('right') && !dir.includes('left')) return 'right';
+                
+                // 斜向方向根据主要分量决定
+                if (dir === 'up-left' || dir === 'up-right') return 'up';
+                if (dir === 'down-left' || dir === 'down-right') return 'down';
+                
+                return 'right';
+            }
+        }
+        
+        // ==================== 游戏初始化与设置 ====================
+        
+        // 全局设置对象
+        const settings = {
+            controlType: 'joystick',
+            vibration: true,
+            showHint: true,
+            joystickSensitivity: 2,
+            joystickSize: 2,
+            joystickOpacity: 50
+        };
+        
+        // 摇杆实例
+        let joystick = null;
+        
+        // 初始化摇杆
+        function initJoystick() {
+            const joystickCanvas = document.getElementById('joystick-canvas');
+            const joystickContainer = document.getElementById('joystick-container');
+            
+            // 设置摇杆Canvas大小
+            joystickCanvas.width = 150;
+            joystickCanvas.height = 150;
+            
+            // 创建摇杆实例
+            joystick = new Joystick({
+                canvas: joystickCanvas,
+                ctx: joystickCanvas.getContext('2d'),
+                baseRadius: 40 + (settings.joystickSize - 2) * 10,
+                stickRadius: 20 + (settings.joystickSize - 2) * 5,
+                sensitivity: settings.joystickSensitivity,
+                opacity: settings.joystickOpacity / 100,
+                onDirectionChange: (direction) => {
+                    const simpleDir = joystick.getSimpleDirection();
+                    if (simpleDir && gameRunning) {
+                        // 防止反向移动
+                        if ((simpleDir === 'up' && direction !== 'down') ||
+                            (simpleDir === 'down' && direction !== 'up') ||
+                            (simpleDir === 'left' && direction !== 'right') ||
+                            (simpleDir === 'right' && direction !== 'left')) {
+                            nextDirection = simpleDir;
+                        }
+                    }
+                },
+                onDirectionEnd: () => {
+                    // 摇杆释放时的处理
+                }
+            });
+            
+            // 设置摇杆位置
+            const containerRect = joystickContainer.getBoundingClientRect();
+            joystick.setPosition(75, 75);
+            
+            // 显示摇杆容器
+            joystickContainer.style.display = 'block';
+        }
+        
+        // 保存设置
+        function saveSettings() {
+            settings.controlType = document.getElementById('control-type').value;
+            settings.joystickSensitivity = parseInt(document.getElementById('joystick-sensitivity').value);
+            settings.joystickSize = parseInt(document.getElementById('joystick-size').value);
+            settings.joystickOpacity = parseInt(document.getElementById('joystick-opacity').value);
+            settings.vibration = document.getElementById('vibration-feedback').checked;
+            settings.showHint = document.getElementById('show-hint').checked;
+            
+            // 更新显示值
+            document.getElementById('sensitivity-value').textContent =
+                ['低', '中', '高'][settings.joystickSensitivity - 1];
+            document.getElementById('size-value').textContent =
+                ['小', '中', '大'][settings.joystickSize - 1];
+            document.getElementById('opacity-value').textContent =
+                settings.joystickOpacity + '%';
+            
+            // 应用设置
+            applySettings();
+            toggleSettingsPanel();
+            
+            // 保存到本地存储
+            localStorage.setItem('snakeSettings', JSON.stringify(settings));
+        }
+        
+        // 应用设置
+        function applySettings() {
+            // 控制方式
+            const mobileControls = document.getElementById('mobile-controls');
+            const joystickContainer = document.getElementById('joystick-container');
+            const joystickHint = document.getElementById('joystick-hint');
+            
+            if (settings.controlType === 'joystick') {
+                mobileControls.style.display = 'none';
+                joystickContainer.style.display = 'block';
+                if (settings.showHint) {
+                    joystickHint.style.display = 'block';
+                } else {
+                    joystickHint.style.display = 'none';
+                }
+                
+                // 重新初始化摇杆
+                if (joystick) {
+                    joystick.baseRadius = 40 + (settings.joystickSize - 2) * 10;
+                    joystick.stickRadius = 20 + (settings.joystickSize - 2) * 5;
+                    joystick.sensitivity = settings.joystickSensitivity;
+                    joystick.opacity = settings.joystickOpacity / 100;
+                    joystick.draw();
+                }
+            } else if (settings.controlType === 'buttons') {
+                mobileControls.style.display = 'block';
+                joystickContainer.style.display = 'none';
+                joystickHint.style.display = 'none';
+            } else {
+                mobileControls.style.display = 'none';
+                joystickContainer.style.display = 'none';
+                joystickHint.style.display = 'none';
+            }
+        }
+        
+        // 加载设置
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('snakeSettings');
+            if (savedSettings) {
+                Object.assign(settings, JSON.parse(savedSettings));
+            }
+            
+            // 更新UI
+            document.getElementById('control-type').value = settings.controlType;
+            document.getElementById('joystick-sensitivity').value = settings.joystickSensitivity;
+            document.getElementById('joystick-size').value = settings.joystickSize;
+            document.getElementById('joystick-opacity').value = settings.joystickOpacity;
+            document.getElementById('vibration-feedback').checked = settings.vibration;
+            document.getElementById('show-hint').checked = settings.showHint;
+            
+            // 更新显示值
+            document.getElementById('sensitivity-value').textContent =
+                ['低', '中', '高'][settings.joystickSensitivity - 1];
+            document.getElementById('size-value').textContent =
+                ['小', '中', '大'][settings.joystickSize - 1];
+            document.getElementById('opacity-value').textContent =
+                settings.joystickOpacity + '%';
+        }
+        
+        // 切换设置面板显示
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settings-panel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+        
+        // 关闭引导
+        function closeGuide() {
+            document.getElementById('first-time-guide').style.display = 'none';
+            localStorage.setItem('snakeFirstTime', 'false');
+        }
+        
+        // 从引导打开设置
+        function openSettingsFromGuide() {
+            document.getElementById('first-time-guide').style.display = 'none';
+            toggleSettingsPanel();
+        }
+        
+        // ==================== 事件监听器 ====================
+        
+        // 移动设备控制按钮事件
+        upButton.addEventListener('click', () => {
+            if (direction !== 'down') nextDirection = 'up';
+        });
+        
+        downButton.addEventListener('click', () => {
+            if (direction !== 'up') nextDirection = 'down';
+        });
+        
+        leftButton.addEventListener('click', () => {
+            if (direction !== 'right') nextDirection = 'left';
+        });
+        
+        rightButton.addEventListener('click', () => {
+            if (direction !== 'left') nextDirection = 'right';
+        });
+        
+        // 游戏控制按钮事件
+        startButton.addEventListener('click', startGame);
+        pauseButton.addEventListener('click', pauseGame);
+        resetButton.addEventListener('click', resetGame);
+        
+        // 键盘事件
+        document.addEventListener('keydown', handleKeyDown);
+        
+        // 设置按钮事件
+        document.getElementById('settings-btn').addEventListener('click', toggleSettingsPanel);
+        
+        // 设置滑块事件
+        document.getElementById('joystick-sensitivity').addEventListener('input', function() {
+            document.getElementById('sensitivity-value').textContent =
+                ['低', '中', '高'][this.value - 1];
+        });
+        
+        document.getElementById('joystick-size').addEventListener('input', function() {
+            document.getElementById('size-value').textContent =
+                ['小', '中', '大'][this.value - 1];
+        });
+        
+        document.getElementById('joystick-opacity').addEventListener('input', function() {
+            document.getElementById('opacity-value').textContent = this.value + '%';
+        });
+        
+        // 窗口调整大小事件
+        window.addEventListener('resize', function() {
+            if (window.innerWidth <= 480) {
+                const containerWidth = document.querySelector('.game-board-container').offsetWidth;
+                canvas.width = containerWidth;
+                canvas.height = containerWidth * 0.66;
+                draw();
+            }
+        });
+        
+        // ==================== 初始化 ====================
+        
+        // 初始化游戏
+        initGame();
+        
+        // 加载设置
+        loadSettings();
+        
+        // 初始化摇杆
+        initJoystick();
+        
+        // 应用设置
+        applySettings();
+        
+        // 检查是否首次使用
+        if (!localStorage.getItem('snakeFirstTime')) {
+            document.getElementById('first-time-guide').style.display = 'flex';
+        }
+        
+        // 更新最高分显示
+        highScoreElement.textContent = highScore;
+    </script>
+</body>
+</html>
